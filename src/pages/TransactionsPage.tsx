@@ -118,7 +118,7 @@ export const TransactionsPage: React.FC<TransactionsPageProps> = ({ flagResults 
         {/* Footer */}
         <div style={{ marginTop: 10, fontSize: 11, color: COLORS.muted, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
           <span>Fraud Rule Engine Simulator — Phase 3: Ledger + Rule Flags · Falcon/EFRM Simulation</span>
-          <span style={{ fontFamily: FONTS.mono }}>Dataset: TXN-001 → TXN-050 · January 2025 · INR</span>
+          <span style={{ fontFamily: FONTS.mono }}>Dataset: TXN-001 → TXN-{String(TRANSACTIONS.length).padStart(3, '0')} · January 2025 · INR</span>
         </div>
       </div>
     </div>

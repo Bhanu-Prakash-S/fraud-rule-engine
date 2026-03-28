@@ -1,46 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Rule, RuleCondition, TransactionField, Operator, Severity, LogicalJoin } from '../types/rule';
 import { COLORS, FONTS, SEVERITY_COLORS } from '../constants/theme';
-import { CHANNELS, MERCHANT_CATEGORIES } from '../constants/enums';
 import { buildSRLPreview } from '../engine/srlPreview';
+import { ValueEditor } from './ValueEditor';
+import { ALL_FIELDS, defaultValueForField, FIELD_META, opsForKind } from '../types/field';
 
-// ── Field metadata ────────────────────────────────────────────
-type FieldKind = 'numeric' | 'string' | 'boolean' | 'enum_channel' | 'enum_category' | 'enum_type';
 
-const FIELD_META: Record<TransactionField, { label: string; kind: FieldKind }> = {
-  amount:             { label: 'Amount (₹)',          kind: 'numeric' },
-  customerAge:        { label: 'Customer Age (days)',  kind: 'numeric' },
-  hour:               { label: 'Hour (0–23)',          kind: 'numeric' },
-  channel:            { label: 'Channel',              kind: 'enum_channel' },
-  merchantCategory:   { label: 'Merchant Category',   kind: 'enum_category' },
-  type:               { label: 'Txn Type',             kind: 'enum_type' },
-  city:               { label: 'City',                 kind: 'string' },
-  isNewPayee:         { label: 'Is New Payee',         kind: 'boolean' },
-};
-
-const ALL_FIELDS = Object.keys(FIELD_META) as TransactionField[];
-
-function opsForKind(kind: FieldKind): Operator[] {
-  switch (kind) {
-    case 'numeric':                         return ['>', '<', '>=', '<=', '=', '!='];
-    case 'boolean':                         return ['='];
-    case 'string':                          return ['=', '!=', 'in', 'not in'];
-    case 'enum_channel':
-    case 'enum_category':
-    case 'enum_type':                       return ['=', '!=', 'in', 'not in'];
-  }
-}
-
-function defaultValueForField(field: TransactionField, op: Operator): Rule['conditions'][0]['value'] {
-  const { kind } = FIELD_META[field];
-  if (op === 'in' || op === 'not in') return [];
-  if (kind === 'numeric')              return 0;
-  if (kind === 'boolean')              return true;
-  if (kind === 'enum_channel')         return CHANNELS[0];
-  if (kind === 'enum_category')        return MERCHANT_CATEGORIES[0];
-  if (kind === 'enum_type')            return 'Debit';
-  return '';
-}
 
 function makeCondition(id: string): RuleCondition {
   return { id, field: 'amount', operator: '>', value: 0, logicalJoin: 'AND' };
@@ -58,146 +23,26 @@ const inputBase: React.CSSProperties = {
   fontFamily: FONTS.ui, outline: 'none',
 };
 
-// ── Multi-chip select for 'in' / 'not in' ────────────────────
-interface ChipSelectProps {
-  options: string[];
-  selected: string[];
-  onChange: (v: string[]) => void;
-}
-
-const ChipSelect: React.FC<ChipSelectProps> = ({ options, selected, onChange }) => {
-  const toggle = (opt: string) => {
-    onChange(selected.includes(opt) ? selected.filter(s => s !== opt) : [...selected, opt]);
-  };
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
-      {options.map(opt => {
-        const active = selected.includes(opt);
-        return (
-          <button key={opt} onClick={() => toggle(opt)} style={{
-            fontSize: 11, padding: '2px 9px', borderRadius: 12,
-            border: `1px solid ${active ? COLORS.accent : COLORS.border}`,
-            background: active ? COLORS.accent : COLORS.surface,
-            color: active ? '#fff' : COLORS.muted,
-            cursor: 'pointer', fontFamily: FONTS.ui, fontWeight: active ? 600 : 400,
-          }}>
-            {opt}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
-
-// ── Value editor — context-aware ─────────────────────────────
-interface ValueEditorProps {
-  field: TransactionField;
-  operator: Operator;
-  value: RuleCondition['value'];
-  onChange: (v: RuleCondition['value']) => void;
-}
-
-const ValueEditor: React.FC<ValueEditorProps> = ({ field, operator, value, onChange }) => {
-  const { kind } = FIELD_META[field];
-
-  if (operator === 'in' || operator === 'not in') {
-    let options: string[] = [];
-    if (kind === 'enum_channel')   options = [...CHANNELS];
-    else if (kind === 'enum_category') options = [...MERCHANT_CATEGORIES];
-    else if (kind === 'enum_type') options = ['Debit', 'Credit'];
-    else options = [];
-    return (
-      <ChipSelect
-        options={options}
-        selected={Array.isArray(value) ? (value as string[]) : []}
-        onChange={onChange}
-      />
-    );
-  }
-
-  if (kind === 'boolean') {
-    const bv = value === true || value === 'true';
-    return (
-      <div style={{ display: 'flex', gap: 4 }}>
-        {([true, false] as const).map(opt => (
-          <button key={String(opt)} onClick={() => onChange(opt)} style={{
-            ...inputBase, width: 56, cursor: 'pointer', textAlign: 'center',
-            background: bv === opt ? COLORS.accent : COLORS.surface,
-            color: bv === opt ? '#fff' : COLORS.muted,
-            border: `1px solid ${bv === opt ? COLORS.accent : COLORS.border}`,
-            fontWeight: bv === opt ? 600 : 400,
-          }}>
-            {opt ? 'true' : 'false'}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  if (kind === 'enum_channel') {
-    return (
-      <select style={{ ...inputBase, minWidth: 130, cursor: 'pointer' }} value={String(value)}
-        onChange={e => onChange(e.target.value)}>
-        {CHANNELS.map(c => <option key={c}>{c}</option>)}
-      </select>
-    );
-  }
-
-  if (kind === 'enum_category') {
-    return (
-      <select style={{ ...inputBase, minWidth: 150, cursor: 'pointer' }} value={String(value)}
-        onChange={e => onChange(e.target.value)}>
-        {MERCHANT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-      </select>
-    );
-  }
-
-  if (kind === 'enum_type') {
-    return (
-      <select style={{ ...inputBase, minWidth: 100, cursor: 'pointer' }} value={String(value)}
-        onChange={e => onChange(e.target.value)}>
-        <option>Debit</option>
-        <option>Credit</option>
-      </select>
-    );
-  }
-
-  if (kind === 'numeric') {
-    return (
-      <input type="number" style={{ ...inputBase, width: 100, textAlign: 'right' }}
-        value={Number(value)}
-        onChange={e => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-      />
-    );
-  }
-
-  // string
-  return (
-    <input type="text" style={{ ...inputBase, minWidth: 140 }}
-      value={String(value)}
-      placeholder="value…"
-      onChange={e => onChange(e.target.value)}
-    />
-  );
-};
 
 // ── Props ─────────────────────────────────────────────────────
 interface RuleBuilderProps {
   editingRule: Rule | null;
-  onSave: (rule: Rule) => void;
+  allRules:    Rule[];
+  onSave:      (rule: Rule) => void;
   onClearEdit: () => void;
 }
 
 const SEVERITIES: Severity[] = ['Low', 'Medium', 'High', 'Critical'];
 
 // ── Component ─────────────────────────────────────────────────
-export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, onClearEdit }) => {
-  const [name,        setName]        = useState('');
-  const [description, setDescription] = useState('');
-  const [scenario,    setScenario]    = useState('');
-  const [severity,    setSeverity]    = useState<Severity>('Medium');
-  const [conditions,  setConditions]  = useState<RuleCondition[]>([makeCondition(nanoid())]);
-  const [saveFlash,   setSaveFlash]   = useState(false);
+export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, allRules, onSave, onClearEdit }) => {
+  const [name,          setName]          = useState('');
+  const [description,   setDescription]   = useState('');
+  const [scenario,      setScenario]      = useState('');
+  const [severity,      setSeverity]      = useState<Severity>('Medium');
+  const [conditions,    setConditions]    = useState<RuleCondition[]>([makeCondition(nanoid())]);
+  const [saveFlash,     setSaveFlash]     = useState(false);
+  const [conflictToast, setConflictToast] = useState<string | null>(null);
 
   // Populate form when editing an existing rule
   useEffect(() => {
@@ -218,17 +63,15 @@ export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, o
   }, [onClearEdit]);
 
   // ── Condition helpers ────────────────────────────────────────
-  const updateCond = (id: string, patch: Partial<RuleCondition>) => {
+  const updateCond = (id: string, patch: Partial<RuleCondition>): void => {
     setConditions(prev => prev.map(c => {
       if (c.id !== id) return c;
       const updated = { ...c, ...patch };
-      // When field changes, reset operator + value to sane defaults
       if (patch.field && patch.field !== c.field) {
         const ops = opsForKind(FIELD_META[patch.field].kind);
         updated.operator = ops[0];
         updated.value    = defaultValueForField(patch.field, ops[0]);
       }
-      // When operator changes, reset value if switching to/from multi
       if (patch.operator && patch.operator !== c.operator) {
         updated.value = defaultValueForField(updated.field, patch.operator);
       }
@@ -236,16 +79,33 @@ export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, o
     }));
   };
 
-  const addCond = () => setConditions(prev => [...prev, makeCondition(nanoid())]);
+  const addCond = (): void => setConditions(prev => [...prev, makeCondition(nanoid())]);
 
-  const removeCond = (id: string) =>
+  const removeCond = (id: string): void =>
     setConditions(prev => prev.length > 1 ? prev.filter(c => c.id !== id) : prev);
 
+  // ── Conflict detection ───────────────────────────────────────
+  function serializeCondition(c: RuleCondition): string {
+    const v = Array.isArray(c.value) ? [...(c.value as string[])].sort().join(',') : String(c.value);
+    return `${c.field}|${c.operator}|${v}`;
+  }
+
+  function checkConflicts(thisId: string): string | null {
+    const thisKeys = new Set(conditions.map(serializeCondition));
+    for (const other of allRules) {
+      if (other.id === thisId || !other.isActive) continue;
+      const matches = other.conditions.filter(c => thisKeys.has(serializeCondition(c)));
+      if (matches.length >= 2) return other.name;
+    }
+    return null;
+  }
+
   // ── Save ─────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = (): void => {
     if (!name.trim()) return;
+    const ruleId = editingRule?.id ?? `RULE-${Date.now()}`;
     const rule: Rule = {
-      id:          editingRule?.id ?? `RULE-${Date.now()}`,
+      id:          ruleId,
       name:        name.trim(),
       description: description.trim(),
       scenario:    scenario.trim(),
@@ -254,6 +114,14 @@ export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, o
       createdAt:   editingRule?.createdAt ?? new Date().toISOString(),
       isActive:    editingRule?.isActive  ?? true,
     };
+
+    // Check conflicts before saving
+    const conflict = checkConflicts(ruleId);
+    if (conflict) {
+      setConflictToast(conflict);
+      setTimeout(() => setConflictToast(null), 5000);
+    }
+
     onSave(rule);
     setSaveFlash(true);
     setTimeout(() => setSaveFlash(false), 1600);
@@ -479,6 +347,31 @@ export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, o
         </div>
       </div>
 
+      {/* ── Conflict toast ── */}
+      {conflictToast && (
+        <div style={{
+          background: '#FFF7ED', border: `1px solid #FED7AA`,
+          borderLeft: `3px solid ${COLORS.warning}`,
+          borderRadius: 5, padding: '10px 14px',
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: '#92400E', marginBottom: 2 }}>
+              Potential rule overlap detected with "{conflictToast}"
+            </div>
+            <div style={{ fontSize: 11.5, color: '#78350F' }}>
+              This rule shares 2 or more identical conditions with an existing active rule.
+              Consider reviewing for redundancy before activating.
+            </div>
+          </div>
+          <button onClick={() => setConflictToast(null)} style={{
+            marginLeft: 'auto', background: 'none', border: 'none',
+            cursor: 'pointer', color: COLORS.muted, fontSize: 14, flexShrink: 0,
+          }}>✕</button>
+        </div>
+      )}
+
       {/* ── Save button ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button
@@ -510,3 +403,4 @@ export const RuleBuilder: React.FC<RuleBuilderProps> = ({ editingRule, onSave, o
     </div>
   );
 };
+

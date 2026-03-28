@@ -8,6 +8,7 @@ import { DonutChart } from '../charts/DonutChart';
 import { HourlyChart } from '../charts/HourlyChart';
 import { ChannelChart } from '../charts/ChannelChart';
 import { AuditLog } from '../charts/AuditLog';
+import { AboutPanel } from '../charts/AboutPanel';
 
 
 interface DashboardPageProps {
@@ -42,10 +43,6 @@ function exportCSV(flagResults: FlagResult[]): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
-
-
-
 
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
@@ -329,6 +326,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ flagResults }) => 
           <AuditLog entries={auditLog} />
         </div>
 
+        {/* ── About This Project (collapsible) ── */}
+        <AboutPanel />
+        
         {/* Footer */}
         <div style={{ fontSize: 11, color: COLORS.muted, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
           <span>Fraud Rule Engine Simulator · Falcon/EFRM Simulation</span>

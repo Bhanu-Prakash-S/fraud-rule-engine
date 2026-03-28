@@ -148,14 +148,95 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
   return false;
 }
 
+// ── Live Rule Test helper ─────────────────────────────────────────────────────
 
+export interface ConditionResult {
+  field: string;
+  operator: string;
+  ruleValue: string;
+  txValue:   string;
+  passed:    boolean;
+}
 
+export interface RuleTestResult {
+  rule:       Rule;
+  fired:      boolean;
+  conditions: ConditionResult[];
+}
 
+/**
+ * testSingleTransaction — evaluates one manually-constructed transaction
+ * against all active rules, returning per-condition pass/fail details.
+ * Used by the Live Rule Test panel to simulate real-time EFRM evaluation.
+ */
+export function testSingleTransaction(
+  tx: Transaction,
+  rules: Rule[],
+): RuleTestResult[] {
+  const txHour = new Date(tx.timestamp).getHours();
+  const activeRules = rules.filter(r => r.isActive);
 
+  return activeRules.map(rule => {
+    const condResults: ConditionResult[] = rule.conditions.map(cond => {
+      const rawTxVal: unknown = cond.field === 'hour'
+        ? txHour
+        : tx[cond.field as keyof Transaction];
 
+      const passed = evalConditionBool(rawTxVal, cond.operator, cond.value);
 
+      const ruleVal = Array.isArray(cond.value)
+        ? `[${(cond.value as string[]).join(', ')}]`
+        : String(cond.value);
 
+      return {
+        field:     cond.field,
+        operator:  cond.operator,
+        ruleValue: ruleVal,
+        txValue:   String(rawTxVal),
+        passed,
+      };
+    });
 
+    const fired = ruleMatches(tx, txHour, rule);
+
+    return { rule, fired, conditions: condResults };
+  });
+}
+
+function evalConditionBool(
+  txValue: unknown,
+  operator: string,
+  value:   Rule['conditions'][0]['value'],
+): boolean {
+  if (operator === 'in') {
+    const arr = Array.isArray(value) ? value : [String(value)];
+    return arr.some(v => String(txValue) === String(v));
+  }
+  if (operator === 'not in') {
+    const arr = Array.isArray(value) ? value : [String(value)];
+    return arr.every(v => String(txValue) !== String(v));
+  }
+  if (typeof txValue === 'boolean') {
+    const target = value === true || value === 'true';
+    if (operator === '=')  return txValue === target;
+    if (operator === '!=') return txValue !== target;
+    return false;
+  }
+  if (typeof txValue === 'number') {
+    const num = typeof value === 'number' ? value : Number(value);
+    if (operator === '>')  return txValue >  num;
+    if (operator === '<')  return txValue <  num;
+    if (operator === '>=') return txValue >= num;
+    if (operator === '<=') return txValue <= num;
+    if (operator === '=')  return txValue === num;
+    if (operator === '!=') return txValue !== num;
+  }
+  const txStr  = String(txValue);
+  const valStr = String(value);
+  if (operator === '=')  return txStr === valStr;
+  if (operator === '!=') return txStr !== valStr;
+  return false;
+}
 
 
 
@@ -167,6 +248,44 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 // import { Transaction } from '../types/transaction';
 // import { Rule, RuleCondition } from '../types/rule';
 // import { FlagResult } from '../types/alert';
+
+// // ── Audit Log ─────────────────────────────────────────────────────────────────
+
+// export type AuditAction =
+//   | 'CREATE'
+//   | 'UPDATE'
+//   | 'DELETE'
+//   | 'TOGGLE_ACTIVE'
+//   | 'TOGGLE_INACTIVE';
+
+// export interface AuditEntry {
+//   id: string;
+//   timestamp: string;       // ISO 8601
+//   action: AuditAction;
+//   ruleId: string;
+//   ruleName: string;
+//   analyst: string;         // hardcoded "Analyst" in simulation
+//   detail: string;          // human-readable change description
+// }
+
+// /** Module-level session audit log — cleared on page refresh (by design). */
+// const _auditLog: AuditEntry[] = [];
+// let _auditSeq = 1;
+
+// export function addAuditEntry(entry: Omit<AuditEntry, 'id' | 'timestamp' | 'analyst'>): void {
+//   _auditLog.unshift({
+//     ...entry,
+//     id:        `AUDIT-${String(_auditSeq++).padStart(3, '0')}`,
+//     timestamp: new Date().toISOString(),
+//     analyst:   'Analyst (Simulation)',
+//   });
+// }
+
+// export function getRuleAuditLog(): AuditEntry[] {
+//   return [..._auditLog];
+// }
+
+// // ── Rule Evaluation Engine ────────────────────────────────────────────────────
 
 // /**
 //  * evaluateRules — mirrors SRL scenario evaluation in Falcon/EFRM.
@@ -196,7 +315,6 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 //   let alertSeq = 1;
 
 //   for (const tx of transactions) {
-//     // Derive virtual `hour` field (0–23) from timestamp
 //     const txHour = new Date(tx.timestamp).getHours();
 
 //     for (const rule of activeRules) {
@@ -216,7 +334,6 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 //     }
 //   }
 
-//   // Sort: Critical → High → Medium → Low, then by transactionId
 //   const SEV_ORDER: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 //   results.sort((a, b) => {
 //     const sd = (SEV_ORDER[a.severity] ?? 4) - (SEV_ORDER[b.severity] ?? 4);
@@ -229,39 +346,23 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 
 // // ── Internal helpers ──────────────────────────────────────────────────────────
 
-// /**
-//  * Evaluate all conditions of a rule against a single transaction.
-//  * Conditions are chained left-to-right using each condition's logicalJoin
-//  * (which joins it to the NEXT condition).
-//  */
 // function ruleMatches(tx: Transaction, txHour: number, rule: Rule): boolean {
 //   const { conditions } = rule;
 //   if (conditions.length === 0) return false;
 
 //   let result = evalCondition(tx, txHour, conditions[0]);
-
 //   for (let i = 1; i < conditions.length; i++) {
-//     const join  = conditions[i - 1].logicalJoin; // join between [i-1] and [i]
-//     const next  = evalCondition(tx, txHour, conditions[i]);
+//     const join = conditions[i - 1].logicalJoin;
+//     const next = evalCondition(tx, txHour, conditions[i]);
 //     result = join === 'AND' ? result && next : result || next;
 //   }
-
 //   return result;
 // }
 
-// /**
-//  * Evaluate a single condition against a transaction.
-//  * The special `hour` field is derived from txHour rather than tx itself.
-//  */
 // function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): boolean {
 //   const { field, operator, value } = cond;
+//   const txValue: unknown = field === 'hour' ? txHour : tx[field as keyof Transaction];
 
-//   // Resolve the transaction field value (with `hour` as a runtime-derived field)
-//   const txValue: unknown = field === 'hour'
-//     ? txHour
-//     : tx[field as keyof Transaction];
-
-//   // Multi-value operators
 //   if (operator === 'in') {
 //     const arr = Array.isArray(value) ? value : [String(value)];
 //     return arr.some(v => String(txValue) === String(v));
@@ -270,16 +371,12 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 //     const arr = Array.isArray(value) ? value : [String(value)];
 //     return arr.every(v => String(txValue) !== String(v));
 //   }
-
-//   // Boolean equality
 //   if (typeof txValue === 'boolean') {
 //     const target = value === true || value === 'true';
 //     if (operator === '=')  return txValue === target;
 //     if (operator === '!=') return txValue !== target;
 //     return false;
 //   }
-
-//   // Numeric comparison
 //   if (typeof txValue === 'number') {
 //     const num = typeof value === 'number' ? value : Number(value);
 //     switch (operator) {
@@ -291,12 +388,15 @@ function evalCondition(tx: Transaction, txHour: number, cond: RuleCondition): bo
 //       case '!=': return txValue !== num;
 //     }
 //   }
-
-//   // String equality
-//   const txStr = String(txValue);
+//   const txStr  = String(txValue);
 //   const valStr = String(value);
 //   if (operator === '=')  return txStr === valStr;
 //   if (operator === '!=') return txStr !== valStr;
-
 //   return false;
 // }
+
+
+
+
+
+

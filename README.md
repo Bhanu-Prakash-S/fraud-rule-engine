@@ -23,20 +23,25 @@ Open [http://localhost:3000](http://localhost:3000)
 src/
 ├── types/
 │   ├── transaction.ts         ← Transaction interface (strict TS)
-│   └── rule.ts                ← Rule, RuleCondition, TransactionField, Operator
+│   ├── rule.ts                ← Rule, RuleCondition, TransactionField, Operator
+│   └── alert.ts               ← FlagResult interface
 ├── data/
-│   ├── transactions.ts        ← 50 mock transactions (10 GT-flagged)
+│   ├── transactions.ts        ← 54 mock transactions (10 GT-flagged + 4 IMPS FP bait)
 │   └── seedRules.ts           ← 3 seed rules + localStorage helpers
 ├── engine/
+│   ├── ruleEngine.ts          ← evaluateRules() + AuditEntry log + getRuleAuditLog()
 │   └── srlPreview.ts          ← Converts Rule → SRL text (Falcon syntax)
 ├── components/
 │   ├── FilterBar.tsx           ← Channel / Category / Type / Payee filters
-│   ├── TransactionTable.tsx   ← Paginated transaction ledger (10/page)
+│   ├── TransactionTable.tsx   ← Paginated ledger + slide-over inspector + flag borders
 │   ├── RuleBuilder.tsx        ← Multi-condition rule builder + SRL preview
-│   └── RuleLibrary.tsx        ← Saved rule cards (edit / toggle / delete)
+│   ├── RuleLibrary.tsx        ← Saved rule cards (edit / toggle / delete)
+│   └── AlertsQueue.tsx        ← Alert table with FP toggle
 ├── pages/
 │   ├── TransactionsPage.tsx   ← Phase 1 ledger view
-│   └── RuleBuilderPage.tsx    ← Two-column: builder (60%) + library (40%)
+│   ├── RuleBuilderPage.tsx    ← Two-column: builder (60%) + library (40%)
+│   ├── AlertsPage.tsx         ← Run All Rules + alerts queue
+│   └── DashboardPage.tsx      ← MIS dashboard: KPIs, charts, CSV export, audit log
 └── constants/
     ├── theme.ts               ← Colors, fonts, spacing, badge color maps
     └── enums.ts               ← Channel, Category, Type + PAGE_SIZE
@@ -46,7 +51,7 @@ src/
 
 ## Phase 1 — Transaction Ledger
 
-50 mock transactions with 10 ground-truth fraud patterns:
+54 mock transactions (50 normal + 4 IMPS false-positive bait) with 10 ground-truth fraud patterns:
 
 | TXN IDs      | Pattern                                            | Why Suspicious              |
 |--------------|----------------------------------------------------|-----------------------------|
@@ -54,6 +59,7 @@ src/
 | TXN-005–007  | 3× sub-₹500 IMPS to same payee within **9 min**    | Card-testing / velocity     |
 | TXN-008, 010 | Debits to **Crypto Exchange** merchants            | Mule network cash-out       |
 | TXN-009      | Debit to **Gaming** merchant (WinZO)               | High-risk merchant category |
+| TXN-051–054  | Legitimate sub-₹500 IMPS debits (canteen etc.)    | **Intentional FP bait for RULE-002** |
 
 ---
 
@@ -65,11 +71,31 @@ src/
 - **Rule Library** — persisted to localStorage; edit / active-toggle / delete
 - **3 seed rules** auto-loaded on first launch:
 
-| Rule ID   | Name                          | Scenario             | Severity |
-|-----------|-------------------------------|----------------------|----------|
-| RULE-001  | Late Night High Value UPI     | Late Night Fraud     | Critical |
-| RULE-002  | Rapid Small IMPS Debits       | Velocity Abuse       | Medium   |
-| RULE-003  | High-Risk Merchant Category   | Suspicious Merchant  | High     |
+| Rule ID   | Name                          | Scenario             | Severity | Expected Precision |
+|-----------|-------------------------------|----------------------|----------|--------------------|
+| RULE-001  | Late Night High Value UPI     | Late Night Fraud     | Critical | 100% (green)       |
+| RULE-002  | Rapid Small IMPS Debits       | Velocity Abuse       | Medium   | ~43% (red ⚠)      |
+| RULE-003  | High-Risk Merchant Category   | Suspicious Merchant  | High     | 100% (green)       |
+
+---
+
+## Phase 3 — Rule Engine + Alerts Queue
+
+- **evaluateRules()** — pure function mirroring SRL evaluation in Falcon/EFRM
+- **14 total alerts** from seed rules: 4 + 7 + 3 (RULE-002 catches 4 legitimate txns)
+- **Slide-over inspector** on each transaction row: all fields + triggered rules + SRL
+- **Cross-tab state**: running rules on Alerts tab immediately flags rows in Transactions tab
+
+---
+
+## Phase 4 — MIS Dashboard
+
+- **4 KPI cards**: transactions monitored, alerts raised, confirmed FPs, flag rate
+- **Rule Performance Table**: hit rate %, precision % (color-coded green/amber/red)
+- **3 SVG charts**: channel breakdown (horizontal bars), hourly distribution (vertical bars with late-night spike shading), severity donut
+- **CSV export**: `EFRM_Alert_Report_YYYY-MM-DD.csv` (RBI Format — simulated)
+- **Rule Audit Trail**: every create/edit/delete/toggle logged with timestamp and analyst ID
+- All charts are **pure SVG** — no external chart libraries
 
 ---
 
@@ -104,14 +130,3 @@ src/
 | Scenario      | Named fraud pattern (e.g. "Late Night High Value")   |
 
 ---
-
-*Phase 2 complete — Rule Builder. Awaiting Phase 3 — Rule Evaluation Engine.*
-
-
-
-
-
-
-
-
-

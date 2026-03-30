@@ -12,7 +12,7 @@ interface AlertsPageProps {
 }
 
 export const AlertsPage: React.FC<AlertsPageProps> = ({ flagResults, onRunRules }) => {
-  const [alerts,    setAlerts]    = useState<FlagResult[]>(flagResults);
+  // const [alerts,    setAlerts]    = useState<FlagResult[]>(flagResults);
   const [running,   setRunning]   = useState(false);
   const [lastRun,   setLastRun]   = useState<string | null>(flagResults.length > 0 ? 'Previously run' : null);
 

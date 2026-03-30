@@ -65,7 +65,7 @@ export const AlertsQueue: React.FC<AlertsQueueProps> = ({ alerts, onMarkFP }) =>
           <tbody>
             {sorted.map((alert, i) => {
               const sc      = SEVERITY_COLORS[alert.severity];
-              const isFP    = alert.markedFPByAnalyst || alert.isFalsePositive && alert.markedFPByAnalyst;
+              // const isFP    = alert.markedFPByAnalyst || alert.isFalsePositive && alert.markedFPByAnalyst;
               const muted   = alert.markedFPByAnalyst;
               const hovered = hoveredId === alert.alertId;
               const rowBg   = muted

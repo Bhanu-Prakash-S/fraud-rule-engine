@@ -14,7 +14,7 @@ function formatValue(cond: RuleCondition): string {
 }
 
 function conditionToSRL(cond: RuleCondition): string {
-  const { field, operator, value } = cond;
+  const { field, operator} = cond;
 
   // Special case: BETWEEN expansion is handled at rule level for hour ranges
   return `${field} ${operator} ${formatValue(cond)}`;

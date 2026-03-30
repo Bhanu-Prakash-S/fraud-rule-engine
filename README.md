@@ -8,9 +8,10 @@ Built as a realistic internal-tool simulation — not a consumer app. Every desi
 
 ## 🔗 Live Demo
 
-**[https://yourusername.github.io/fraud-rule-engine](https://yourusername.github.io/fraud-rule-engine)**
+**https://fraud-rule-engine-beta.vercel.app/**
 
-> Replace the URL above with your actual GitHub Pages link after deployment.
+## ⚠️ Note
+This project is optimized for desktop use only. Mobile responsiveness is not currently supported.
 
 ---
 

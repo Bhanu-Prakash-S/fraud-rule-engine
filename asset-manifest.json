@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/fraud-rule-engine/static/js/main.c60210bf.js",
+    "index.html": "/fraud-rule-engine/index.html",
+    "main.c60210bf.js.map": "/fraud-rule-engine/static/js/main.c60210bf.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.c60210bf.js"
+  ]
+}
